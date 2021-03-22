@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -eu
+
+CARGO_BUILD_PIPELINING=false cargo rustc -- --crate-type=bin --cfg=spec
+
+# Now let's try to figure out what binary was built and run it. It'd
+# be nice if we could just tell the compiler what binary to build
+# instead...
+#
+# We build again with JSON output enabled. The rmeta filenames contain
+# the build hash, and the last one should correspond with our crate.
+json_output=$(CARGO_BUILD_PIPELINING=false cargo rustc --message-format json -- --crate-type=bin --cfg=spec 2> /dev/null)
+exe_rmeta=$(echo $json_output | jq -r 'select(.reason == "compiler-artifact") | .filenames[] | select(. | contains("rmeta"))' | tail -n1)
+exe_dir=$(dirname "${exe_rmeta}")
+rmeta_fname=$(basename "${exe_rmeta}")
+exe_fname=$(echo $rmeta_fname | sed 's@^lib@@' | sed 's@\.rmeta$@@')
+exe="${exe_dir}/${exe_fname}"
+
+"${exe}"
